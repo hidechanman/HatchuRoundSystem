@@ -4,9 +4,11 @@ Option Explicit
 '============================================================
 ' 発注まるめシステム Ver5.0
 ' Controller 基盤
+' Ver5.0.1 Part1 Fix
+' ParamArrayを使用しない固定引数方式
 '============================================================
 
-Private Const HRS5_VERSION As String = "Ver5.0.0 Part1"
+Private Const HRS5_VERSION As String = "Ver5.0.1 Part1 Fix"
 Private Const PROC_AFTER_IMPORT As String = "HRS4_AfterImport"
 Private Const PROC_LOAD_SELECTED As String = "HRS4_LoadSelectedProductToLegacyPreview"
 Private Const PROC_SESSION_INIT As String = "HRS4S_Initialize"
@@ -50,7 +52,7 @@ Public Sub HRS5_Initialize()
     If Not HRS5_Enter("初期化") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunOptional PROC_SESSION_INIT, True
+    HRS5_RunOptional1 PROC_SESSION_INIT, True
     mInitialized = True
 
 Done:
@@ -65,8 +67,8 @@ Public Sub HRS5_AfterImport()
     If Not HRS5_Enter("読込後処理") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_AFTER_IMPORT
-    HRS5_RunOptional PROC_SESSION_INIT, True
+    HRS5_RunRequired0 PROC_AFTER_IMPORT
+    HRS5_RunOptional1 PROC_SESSION_INIT, True
     mInitialized = True
 
 Done:
@@ -83,15 +85,15 @@ Public Sub HRS5_SelectProduct(ByVal productCode As String, Optional ByVal vendor
     On Error GoTo EH
 
     If Len(mCurrentProductCode) > 0 Then
-        HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+        HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
     End If
 
     mCurrentProductCode = Trim$(productCode)
     mCurrentVendorCode = Trim$(vendorCode)
 
-    HRS5_RunRequired PROC_LOAD_SELECTED
-    HRS5_RunOptional PROC_SESSION_RESTORE, mCurrentProductCode, mCurrentVendorCode
-    HRS5_RunOptional PROC_UPDATE_CANCEL_DISPLAY
+    HRS5_RunRequired0 PROC_LOAD_SELECTED
+    HRS5_RunOptional2 PROC_SESSION_RESTORE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunOptional0 PROC_UPDATE_CANCEL_DISPLAY
 
 Done:
     HRS5_Leave
@@ -109,9 +111,9 @@ Public Sub HRS5_Distribute(ByVal orderQty As Double, Optional ByVal includeCance
     If Not HRS5_Enter("発注配分") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_DISTRIBUTE, orderQty, includeCancelled, True
-    HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
-    HRS5_RunOptional PROC_UPDATE_CANCEL_DISPLAY
+    HRS5_RunRequired3 PROC_DISTRIBUTE, orderQty, includeCancelled, True
+    HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunOptional0 PROC_UPDATE_CANCEL_DISPLAY
 
 Done:
     HRS5_Leave
@@ -125,8 +127,8 @@ Public Sub HRS5_CancelCurrentProduct(Optional ByVal turnOn As Boolean = True)
     If Not HRS5_Enter("商品取消") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_CANCEL_CURRENT, turnOn
-    HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunRequired1 PROC_CANCEL_CURRENT, turnOn
+    HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
 
 Done:
     HRS5_Leave
@@ -140,8 +142,8 @@ Public Sub HRS5_CancelAll()
     If Not HRS5_Enter("全取消") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_CANCEL_ALL
-    HRS5_RunOptional PROC_SESSION_FLUSH
+    HRS5_RunRequired0 PROC_CANCEL_ALL
+    HRS5_RunOptional0 PROC_SESSION_FLUSH
 
 Done:
     HRS5_Leave
@@ -155,8 +157,8 @@ Public Sub HRS5_CancelPointOne()
     If Not HRS5_Enter("0.1一括取消") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_CANCEL_POINT_ONE
-    HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunRequired0 PROC_CANCEL_POINT_ONE
+    HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
 
 Done:
     HRS5_Leave
@@ -170,8 +172,8 @@ Public Sub HRS5_ClearCancel()
     If Not HRS5_Enter("取消解除") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunRequired PROC_CLEAR_CANCEL
-    HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunRequired0 PROC_CLEAR_CANCEL
+    HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
 
 Done:
     HRS5_Leave
@@ -185,8 +187,8 @@ Public Sub HRS5_SaveSession()
     If Not HRS5_Enter("セッション保存") Then Exit Sub
     On Error GoTo EH
 
-    HRS5_RunOptional PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
-    HRS5_RunOptional PROC_SESSION_FLUSH
+    HRS5_RunOptional2 PROC_SESSION_SAVE, mCurrentProductCode, mCurrentVendorCode
+    HRS5_RunOptional0 PROC_SESSION_FLUSH
 
 Done:
     HRS5_Leave
@@ -227,46 +229,76 @@ Private Sub HRS5_RecordError(ByVal procedureName As String, ByVal errorNumber As
     MsgBox "処理中にエラーが発生しました。" & vbCrLf & vbCrLf & mLastError, vbCritical
 End Sub
 
-Private Sub HRS5_RunRequired(ByVal procedureName As String, ParamArray args() As Variant)
-    If Not HRS5_RunProcedure(procedureName, args) Then
-        Err.Raise vbObjectError + 5501, "modHRS5_Controller", _
-                  "必要な処理が見つからないか、実行に失敗しました: " & procedureName
-    End If
-End Sub
-
-Private Sub HRS5_RunOptional(ByVal procedureName As String, ParamArray args() As Variant)
-    Call HRS5_RunProcedure(procedureName, args)
-End Sub
-
-Private Function HRS5_RunProcedure(ByVal procedureName As String, ByRef args As Variant) As Boolean
+'============================================================
+' 必須処理
+'============================================================
+Private Sub HRS5_RunRequired0(ByVal procedureName As String)
     On Error GoTo EH
-
-    Select Case HRS5_ArgumentCount(args)
-        Case 0
-            Application.Run procedureName
-        Case 1
-            Application.Run procedureName, args(0)
-        Case 2
-            Application.Run procedureName, args(0), args(1)
-        Case 3
-            Application.Run procedureName, args(0), args(1), args(2)
-        Case 4
-            Application.Run procedureName, args(0), args(1), args(2), args(3)
-        Case Else
-            Err.Raise vbObjectError + 5502, "modHRS5_Controller", _
-                      "Controllerで扱える引数は4個までです: " & procedureName
-    End Select
-
-    HRS5_RunProcedure = True
-    Exit Function
+    Application.Run procedureName
+    Exit Sub
 EH:
-    HRS5_RunProcedure = False
-End Function
+    HRS5_RaiseRequiredError procedureName, Err.Number, Err.Description
+End Sub
 
-Private Function HRS5_ArgumentCount(ByRef args As Variant) As Long
-    On Error GoTo NoArgs
-    HRS5_ArgumentCount = UBound(args) - LBound(args) + 1
-    Exit Function
-NoArgs:
-    HRS5_ArgumentCount = 0
-End Function
+Private Sub HRS5_RunRequired1(ByVal procedureName As String, ByVal arg1 As Variant)
+    On Error GoTo EH
+    Application.Run procedureName, arg1
+    Exit Sub
+EH:
+    HRS5_RaiseRequiredError procedureName, Err.Number, Err.Description
+End Sub
+
+Private Sub HRS5_RunRequired2(ByVal procedureName As String, ByVal arg1 As Variant, ByVal arg2 As Variant)
+    On Error GoTo EH
+    Application.Run procedureName, arg1, arg2
+    Exit Sub
+EH:
+    HRS5_RaiseRequiredError procedureName, Err.Number, Err.Description
+End Sub
+
+Private Sub HRS5_RunRequired3(ByVal procedureName As String, ByVal arg1 As Variant, ByVal arg2 As Variant, ByVal arg3 As Variant)
+    On Error GoTo EH
+    Application.Run procedureName, arg1, arg2, arg3
+    Exit Sub
+EH:
+    HRS5_RaiseRequiredError procedureName, Err.Number, Err.Description
+End Sub
+
+Private Sub HRS5_RaiseRequiredError(ByVal procedureName As String, ByVal sourceNumber As Long, ByVal sourceDescription As String)
+    Dim messageText As String
+
+    messageText = "必要な処理が見つからないか、実行に失敗しました: " & procedureName
+    If Len(sourceDescription) > 0 Then
+        messageText = messageText & vbCrLf & "元のエラー: " & CStr(sourceNumber) & " / " & sourceDescription
+    End If
+
+    Err.Raise vbObjectError + 5501, "modHRS5_Controller", messageText
+End Sub
+
+'============================================================
+' 任意処理
+' 存在しない場合や実行エラーの場合はController処理を停止しません
+'============================================================
+Private Sub HRS5_RunOptional0(ByVal procedureName As String)
+    On Error Resume Next
+    Application.Run procedureName
+    On Error GoTo 0
+End Sub
+
+Private Sub HRS5_RunOptional1(ByVal procedureName As String, ByVal arg1 As Variant)
+    On Error Resume Next
+    Application.Run procedureName, arg1
+    On Error GoTo 0
+End Sub
+
+Private Sub HRS5_RunOptional2(ByVal procedureName As String, ByVal arg1 As Variant, ByVal arg2 As Variant)
+    On Error Resume Next
+    Application.Run procedureName, arg1, arg2
+    On Error GoTo 0
+End Sub
+
+Private Sub HRS5_RunOptional3(ByVal procedureName As String, ByVal arg1 As Variant, ByVal arg2 As Variant, ByVal arg3 As Variant)
+    On Error Resume Next
+    Application.Run procedureName, arg1, arg2, arg3
+    On Error GoTo 0
+End Sub
